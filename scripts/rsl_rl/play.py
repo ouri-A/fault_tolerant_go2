@@ -177,6 +177,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # reset environment
     obs = env.get_observations()
     timestep = 0
+    debug_step = 0  # DEBUG (temporary): knee-angle print
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -188,6 +189,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             obs, _, dones, _ = env.step(actions)
             # reset recurrent states for episodes that have terminated
             policy_nn.reset(dones)
+            # DEBUG (temporary): locked front-left knee vs healthy front-right knee, robot 0
+            if debug_step % 25 == 0:
+                robot = env.unwrapped.scene["robot"]
+                names = robot.joint_names
+                q = robot.data.joint_pos[0]
+                locked = getattr(env.unwrapped, "locked_joint_ids", None)
+                locked_name = names[int(locked[0])] if locked is not None else "none"
+                print(
+                    f"[DEBUG] step {debug_step:4d}"
+                    f"  FL_calf {q[names.index('FL_calf_joint')].item():+.4f}"
+                    f"  FR_calf {q[names.index('FR_calf_joint')].item():+.4f}"
+                    f"  locked={locked_name}"
+                )
+            debug_step += 1
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video

@@ -47,9 +47,19 @@ class FTGo2FlatLockedEnvCfg_PLAY(FTGo2FlatLockedEnvCfg):
         # fixed, easy-to-see failure
         self.events.lock_joint.params["joint_names"] = ["FL_calf_joint"]
 
-        # camera follows robot 0 (used by --video), looking at the front-left side
+        # robot spawns facing +x and walks straight ahead at 0.6 m/s, so the camera angle is predictable
+        self.events.reset_base.params["pose_range"]["yaw"] = (0.0, 0.0)
+        self.commands.base_velocity.rel_standing_envs = 0.0
+        self.commands.base_velocity.ranges.lin_vel_x = (0.6, 0.6)
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+        self.commands.base_velocity.ranges.heading = (0.0, 0.0)
+
+        # camera follows robot 0 from its left side (+y), so the locked front-left leg is nearest.
+        # Pulled back and raised so the velocity arrows (drawn 0.5 m above the base, pointing
+        # forward ~1 m at 0.6 m/s) stay in frame; aimed between the robot and the arrows.
         self.viewer.origin_type = "asset_root"
         self.viewer.asset_name = "robot"
         self.viewer.env_index = 0
-        self.viewer.eye = (1.5, 1.5, 0.8)
-        self.viewer.lookat = (0.0, 0.0, 0.0)
+        self.viewer.eye = (0.4, 2.4, 0.9)
+        self.viewer.lookat = (0.4, 0.0, 0.2)
