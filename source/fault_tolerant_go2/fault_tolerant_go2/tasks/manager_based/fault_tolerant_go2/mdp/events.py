@@ -23,6 +23,7 @@ def lock_one_joint(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | None,
     joint_names: list[str] | None = None,
+    healthy_fraction: float = 0.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ):
     """Lock exactly one joint per reset environment at its standing angle.
@@ -30,16 +31,18 @@ def lock_one_joint(
     Runs in "reset" mode, after the stock joint reset. For each environment being reset it:
       1. restores healthy joint limits (undoes the previous episode's lock),
       2. picks one joint, uniformly from ``joint_names`` (or from all joints if None),
+         and with probability ``healthy_fraction`` marks the episode healthy (no lock),
       3. puts the robot back in its standing pose,
-      4. narrows that joint's limits to [theta - eps, theta + eps] so PhysX holds it rigid,
+      4. narrows the picked joint's limits to [theta - eps, theta + eps] so PhysX holds it
+         rigid (skipped for healthy episodes),
       5. restores the nominal default joint positions.
 
     Step 5 matters: ``write_joint_position_limit_to_sim`` clamps ``default_joint_pos`` into the
     new limits, and the ``joint_pos`` observation is measured relative to that default. Left
     alone, it would tell the policy which joint failed.
 
-    The locked joint index per env is stored in ``env.locked_joint_ids`` for logging/evaluation
-    only. It is never put into the observation.
+    The locked joint index per env (-1 for a healthy episode) is stored in
+    ``env.locked_joint_ids`` for logging/evaluation only. It is never put into the observation.
     """
     asset: Articulation = env.scene[asset_cfg.name]
     if env_ids is None:
@@ -66,21 +69,23 @@ def lock_one_joint(
         candidates = torch.tensor(ids, dtype=torch.long, device=env.device)
     pick = torch.randint(len(candidates), (len(env_ids),), device=env.device)
     joint_idx = candidates[pick]
+    healthy = torch.rand(len(env_ids), device=env.device) < healthy_fraction
 
     # 3. standing pose (the stock reset ran under the old lock and may have clamped it)
     joint_pos = nominal_default[env_ids].clone()
     joint_vel = torch.zeros_like(joint_pos)
     asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
-    # 4. lock
-    rows = torch.arange(len(env_ids), device=env.device)
-    theta = joint_pos[rows, joint_idx]
+    # 4. lock (healthy episodes keep the limits restored in step 1)
+    rows = torch.nonzero(~healthy).squeeze(-1)
+    cols = joint_idx[rows]
+    theta = joint_pos[rows, cols]
     limits = healthy_limits[env_ids].clone()
-    limits[rows, joint_idx, 0] = theta - LOCK_HALF_WIDTH
-    limits[rows, joint_idx, 1] = theta + LOCK_HALF_WIDTH
+    limits[rows, cols, 0] = theta - LOCK_HALF_WIDTH
+    limits[rows, cols, 1] = theta + LOCK_HALF_WIDTH
     asset.write_joint_position_limit_to_sim(limits, env_ids=env_ids, warn_limit_violation=False)
 
     # 5. no leak through the default-relative observation
     asset.data.default_joint_pos[env_ids] = nominal_default[env_ids]
 
-    env.locked_joint_ids[env_ids] = joint_idx
+    env.locked_joint_ids[env_ids] = torch.where(healthy, -1, joint_idx)

@@ -19,13 +19,15 @@ class LockedJointEventCfg(EventCfg):
     lock_joint = EventTerm(
         func=mdp.lock_one_joint,
         mode="reset",
-        params={"joint_names": None},  # None = any of the 12 joints, uniformly
+        # joint_names None = any of the 12 joints, uniformly.
+        # healthy_fraction = share of episodes with no lock at all.
+        params={"joint_names": None, "healthy_fraction": 0.2},
     )
 
 
 @configclass
 class FTGo2FlatLockedEnvCfg(UnitreeGo2FlatEnvCfg):
-    """Training config: a random joint is locked at the start of every episode."""
+    """Training config: a random joint is locked at the start of 80% of episodes; 20% run healthy."""
 
     events: LockedJointEventCfg = LockedJointEventCfg()
 
@@ -46,6 +48,7 @@ class FTGo2FlatLockedEnvCfg_PLAY(FTGo2FlatLockedEnvCfg):
 
         # fixed, easy-to-see failure
         self.events.lock_joint.params["joint_names"] = ["FL_calf_joint"]
+        self.events.lock_joint.params["healthy_fraction"] = 0.0
 
         # robot spawns facing +x and walks straight ahead at 0.6 m/s, so the camera angle is predictable
         self.events.reset_base.params["pose_range"]["yaw"] = (0.0, 0.0)
