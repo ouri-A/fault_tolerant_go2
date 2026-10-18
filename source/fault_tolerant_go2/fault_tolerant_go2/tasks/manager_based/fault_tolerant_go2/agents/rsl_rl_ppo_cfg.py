@@ -12,3 +12,12 @@ class FTGo2FlatLockedPPORunnerCfg(UnitreeGo2FlatPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
         self.experiment_name = "ft_go2_flat_locked"
+
+
+@configclass
+class FTGo2FlatLockedHistPPORunnerCfg(FTGo2FlatLockedPPORunnerCfg):
+    """Policy 3: same PPO settings as policy 2; separate logs folder."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.experiment_name = "ft_go2_flat_locked_hist30"

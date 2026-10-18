@@ -66,3 +66,27 @@ class FTGo2FlatLockedEnvCfg_PLAY(FTGo2FlatLockedEnvCfg):
         self.viewer.env_index = 0
         self.viewer.eye = (0.4, 2.4, 0.9)
         self.viewer.lookat = (0.4, 0.0, 0.2)
+
+
+# Policy 3: same task, but the policy sees the last HISTORY_LENGTH observation frames.
+# 30 frames at 50 Hz = 0.6 s. Isaac Lab flattens (N, 30, 48) to (N, 1440) for the MLP and
+# fills the whole buffer with the first frame after each reset.
+HISTORY_LENGTH = 30
+
+
+@configclass
+class FTGo2FlatLockedHistEnvCfg(FTGo2FlatLockedEnvCfg):
+    """Training config for policy 3: identical to policy 2's, plus observation history."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.observations.policy.history_length = HISTORY_LENGTH
+
+
+@configclass
+class FTGo2FlatLockedHistEnvCfg_PLAY(FTGo2FlatLockedEnvCfg_PLAY):
+    """Viewing/eval config for policy 3: policy 2's Play setup, plus observation history."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.observations.policy.history_length = HISTORY_LENGTH
