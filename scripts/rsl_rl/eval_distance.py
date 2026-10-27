@@ -1,11 +1,14 @@
 """Evaluate a checkpoint on a fixed failure condition: how far does the Go2 walk, and does it fall.
 
-Runs N robots with the same joint locked (or no lock with --healthy), all commanded straight ahead
-at 0.6 m/s for --duration seconds. No pushes, no observation noise, no learning. Each robot gets
-exactly one attempt: once it falls, its result is frozen.
+Runs N robots with the same joint locked (or no lock with --healthy), all given the same fixed
+velocity command (--vx forward, --vy sideways, default 0.6 m/s straight ahead), facing +x, for
+--duration seconds. No pushes, no observation noise, no learning. Each robot gets exactly one
+attempt: once it falls, its result is frozen.
 
-Per robot it records the forward distance (x displacement in metres), whether it fell, and the
-time of the fall. Results go to results/<label>.json and a summary is printed.
+Per robot it records the distance covered along the commanded direction (metres), the sideways
+drift off the commanded line (metres, + = left of it), whether it fell, and the time of the fall.
+With --vy 0 the distance is the x displacement, the same number as before the --vy option existed.
+Results go to results/<label>.json and a summary is printed.
 """
 
 import argparse
@@ -27,6 +30,8 @@ parser.add_argument("--joint", type=str, default="FL_calf_joint", help="Joint to
 parser.add_argument("--healthy", action="store_true", default=False, help="No lock at all (overrides --joint).")
 parser.add_argument("--label", type=str, required=True, help="Name for the results file, e.g. stock_FL_calf.")
 parser.add_argument("--seed", type=int, default=42, help="Seed used for the environment.")
+parser.add_argument("--vx", type=float, default=0.6, help="Commanded forward speed (m/s).")
+parser.add_argument("--vy", type=float, default=0.0, help="Commanded sideways speed (m/s), + = left.")
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -73,6 +78,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
         env_cfg.events.lock_joint.params["joint_names"] = [args_cli.joint]
         env_cfg.events.lock_joint.params["healthy_fraction"] = 0.0
 
+    # fixed velocity command; heading stays at 0 (robot faces +x), as set in the Play config
+    env_cfg.commands.base_velocity.ranges.lin_vel_x = (args_cli.vx, args_cli.vx)
+    env_cfg.commands.base_velocity.ranges.lin_vel_y = (args_cli.vy, args_cli.vy)
+
     # keep the time-out out of the measurement window, so every termination is a fall
     env_cfg.episode_length_s = max(env_cfg.episode_length_s, args_cli.duration + 1.0)
 
@@ -104,8 +113,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
         assert bool((locked == jid).all()), f"expected {args_cli.joint} (id {jid}) locked on every robot"
         condition = args_cli.joint
 
-    start_x = robot.data.root_pos_w[:, 0].clone()
-    last_x = start_x.clone()
+    start_xy = robot.data.root_pos_w[:, :2].clone()
+    last_xy = start_xy.clone()
     alive = torch.ones(base_env.num_envs, dtype=torch.bool, device=device)
     fall_step = torch.full((base_env.num_envs,), -1, dtype=torch.long, device=device)
 
@@ -118,9 +127,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
             newly_fallen = alive & dones
             fall_step[newly_fallen] = step + 1
             alive &= ~dones
-            last_x[alive] = robot.data.root_pos_w[alive, 0]
+            last_xy[alive] = robot.data.root_pos_w[alive, :2]
 
-    distance = (last_x - start_x).cpu()
+    # unit vector along the command, and its left-hand normal
+    speed = (args_cli.vx**2 + args_cli.vy**2) ** 0.5
+    if speed == 0:
+        raise ValueError("--vx and --vy are both 0: no commanded direction to measure along")
+    along_dir = torch.tensor([args_cli.vx / speed, args_cli.vy / speed], device=device)
+    left_dir = torch.tensor([-along_dir[1], along_dir[0]], device=device)
+    disp = last_xy - start_xy
+    distance = (disp @ along_dir).cpu()
+    lateral = (disp @ left_dir).cpu()
+    disp = disp.cpu()
     fell = (fall_step >= 0).cpu()
     fall_time = (fall_step.float() * dt).cpu()
 
@@ -130,11 +148,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
         "condition": condition,
         "num_robots": base_env.num_envs,
         "duration_s": args_cli.duration,
-        "command_mps": 0.6,
+        "command_vx_mps": args_cli.vx,
+        "command_vy_mps": args_cli.vy,
+        "command_mps": speed,
+        "perfect_distance_m": speed * args_cli.duration,
         "seed": args_cli.seed,
         "mean_distance_m": distance.mean().item(),
         "std_distance_m": distance.std().item(),
         "median_distance_m": distance.median().item(),
+        "mean_lateral_m": lateral.mean().item(),
+        "mean_abs_lateral_m": lateral.abs().mean().item(),
         "fall_rate": fell.float().mean().item(),
         "mean_time_to_fall_s": fall_time[fell].mean().item() if fell.any() else None,
     }
@@ -151,6 +174,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
             {
                 "summary": summary,
                 "distance_m": distance.tolist(),
+                "lateral_m": lateral.tolist(),
+                "dx_m": disp[:, 0].tolist(),
+                "dy_m": disp[:, 1].tolist(),
                 "fell": fell.tolist(),
                 "fall_time_s": fall_time.tolist(),
             },
