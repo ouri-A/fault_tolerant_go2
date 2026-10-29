@@ -2,13 +2,13 @@
 
 A Unitree Go2 trained in Isaac Lab to keep walking when one of its 12 joints locks solid. The project compares three PPO policies to answer one question: does the robot need short-term memory to cope with a locked joint, or is a single snapshot of its own state enough?
 
-<!-- VIDEO: drag media/compare_FR_thigh_3way.mp4 onto this line in the GitHub editor -->
+https://github.com/user-attachments/assets/e16cfe73-4e3b-439f-b1bc-f863e1ee32e8
 
 Front-right thigh locked, 0.6 m/s forward command. From left to right: the stock policy, policy 2 (failures, no memory) and policy 3 (failures, 0.6 s of memory).
 
 ## The question
 
-A locked joint is hard to detect from one instant of sensor data. A knee reading 40° is a normal value on its own, and it only becomes evidence of a fault when the policy can see that the knee has stayed at 40° while it has been commanding it to move. That comparison needs history. Every close piece of prior work (listed at the bottom) gives its policy a history window and none of them tests whether the history is what makes it work. This project runs that comparison directly, with the history window as the only difference between the two failure-trained policies.
+A locked joint is hard to detect from one instant of sensor data. A knee reading 40° is a normal value on its own, and it only becomes evidence of a fault when the policy can see that the knee has stayed at 40° while it has been commanding it to move. That comparison needs history. The locked-joint papers listed at the bottom all give their policy a history window, and none of them tests whether the history is what makes it work. This project runs that comparison directly, with the history window as the only difference between the two failure-trained policies.
 
 | Policy | Trained on | Observation |
 |---|---|---|
@@ -39,13 +39,13 @@ Each test runs 256 robots for 20 s with a fixed command, pushes and observation 
 | Joint–seed cases under 3 m | 9 / 12 | 6 / 36 | 0 / 36 |
 | Healthy robot | 12.30 m | 11.90 / 12.12 / 10.59 | 11.88 / 12.10 / 12.14 |
 
-Policy 3 walks 82% of the commanded distance on average, against 70% for policy 2 and 20% for the stock policy. The mean gain from memory is 1.45 m, and with three seeds per policy a Welch t-test on the seed means gives p ≈ 0.12, so the mean difference alone is not statistically conclusive. The worst case is where the difference is clearest: every policy 2 seed has at least one joint where the robot stalls or walks backwards, while policy 3 never drops below 3.4 m on any joint or seed. Memory also costs nothing on a healthy robot, since policy 3 stays within 0.42 m of the stock policy when nothing is broken. The only falls in the whole sweep are policy 3 seed 43 with the FR calf locked, where 49% of robots fall after 5.6 s on average.
+Policy 3 walks 82% of the commanded distance on average, against 70% for policy 2 and 20% for the stock policy. The mean gain from memory is 1.45 m, and with three seeds per policy a Welch t-test on the seed means gives p ≈ 0.12, so the mean difference alone is not statistically conclusive. The worst case is where the difference is clearest: every policy 2 seed has at least one joint where the robot covers under 2 m or walks backwards, while policy 3 never drops below 3.4 m on any joint or seed. Memory also costs nothing on a healthy robot, since policy 3 stays within 0.42 m of the stock policy when nothing is broken. The only falls in the whole sweep are policy 3 seed 43 with the FR calf locked, where 49% of robots fall after 5.6 s on average.
 
 ![Distance per locked joint](docs/img/per_joint_straight.png)
 
-The per-joint chart shows where memory helps. Averaged over seeds, policy 3 gains the most on the thigh joints (FR thigh +8.2 m, RR thigh +7.2 m) and on the RL calf (+4.9 m). It pays for those gains at the FR hip (−4.6 m on all three seeds) and gives up smaller amounts at the FL calf and RL hip. Policy 2 can only learn one gait for every fault, and the thigh joints are where that compromise gait fails, which is consistent with policy 3 using its history to tell those faults apart.
+The per-joint chart shows where memory helps. Averaged over seeds, policy 3 gains the most on the thigh joints (FR thigh +8.2 m, RR thigh +7.2 m) and on the RL calf (+4.9 m). It pays for those gains at the FR hip (−4.6 m on all three seeds) and gives up smaller amounts at the FL calf and RL hip. Policy 2 can only learn one gait for every fault, and the FR and RR thighs are where that compromise gait fails, which is consistent with policy 3 using its history to tell those faults apart.
 
-<!-- VIDEO: drag media/fleet_policy3_s44_random_locks.mp4 onto this line -->
+https://github.com/user-attachments/assets/a595508c-5ada-4273-a4b1-284108601595
 
 Policy 3 (seed 44) with 25 robots, each with a different random joint locked.
 
@@ -62,7 +62,7 @@ The straight test only asks for forward motion, so the sweep was repeated with a
 
 The ranking holds and policy 3 again has no joint under 3 m. Policy 2 seed 42 cannot follow the diagonal even with no joint locked: it travels at 75° instead of 31° and ends 7.4 m off the line.
 
-<!-- VIDEO: drag media/progress_policy3_FR_thigh_montage.mp4 onto this line -->
+https://github.com/user-attachments/assets/004f1612-84eb-4f37-a5e4-326907069d04
 
 Policy 3 with the FR thigh locked at training iterations 0, 250, 500, 1000 and 1999.
 
@@ -104,7 +104,7 @@ python scripts/rsl_rl/train.py --task FT-Go2-Flat-Locked-Hist30-v0 \
   --headless --num_envs 2048 --max_iterations 2000 --seed 43
 ```
 
-One run takes 22–29 minutes per 2,000 iterations on the laptop above for seeds 43 and 44.
+On the laptop above, 2,000 iterations took 22–23 minutes for policy 2 and 28–29 minutes for policy 3 (seeds 43 and 44).
 
 Evaluate one locked joint (add `--healthy` for no lock, `--vx 0.5 --vy 0.3` for the diagonal command):
 
@@ -127,19 +127,19 @@ python scripts/rsl_rl/play.py --task FT-Go2-Flat-Locked-Hist30-Play-v0 --num_env
 
 - Three seeds per policy are enough to show the worst-case difference but not enough for the mean difference to reach significance (p ≈ 0.12).
 - The diagonal sweep uses seed 42 only.
-- The evaluation config sets the yaw-rate command range to (0, 0). Isaac Lab clips its heading controller's output to that range, so heading is not actively held during evaluation and some robots turn while walking. This affects all three policies in the same way, and it contributes to the sideways drift in the diagonal test.
+- The evaluation config sets the yaw-rate command range to (0, 0). Isaac Lab clips its heading controller's output to that range, so heading is not actively held during evaluation and some robots turn while walking. All three policies were evaluated with this setting, and it contributes to the sideways drift in the diagonal test.
 - Each test locks the joint from the first step. Failure partway through a stride, limp (zero-torque) joints, and two simultaneous failures are not tested.
-- Flat terrain only, in simulation only.
+- Flat terrain only.
 
 ## Prior work
 
 - Saving the Limping: Fault-tolerant Quadruped Locomotion via Reinforcement Learning, arXiv:2210.00474 (A1, locked joints, 50-step history through a 1D CNN)
 - Learning Quadrupedal Locomotion with Impaired Joints Using Random Joint Masking, arXiv:2403.00398 (Go1, locked and zero-torque joints, 30-step history)
-- DreamFLEX, arXiv:2502.05817 (Go1, locked and weakened joints, history-based fault estimator)
+- DreamFLEX: Learning Fault-Aware Quadrupedal Locomotion Controller for Anomaly Situation in Rough Terrains, arXiv:2502.05817 (Go1, locked and weakened joints, history-based fault estimator)
 - Learning Fault-Tolerant Locomotion with Adaptive Gait Timing, arXiv:2608.07328 (torque and power loss, compares history length 1 and 3)
 
 All of the locked-joint papers above give the policy a history window. This project measures what that window contributes by training the same policy with and without it on the same robot, failure model and evaluation.
 
-## Authors
+## Author
 
-Anshul Paliwal and Avanish Chandan Jagu, VIT Chennai. Built on the [Isaac Lab](https://github.com/isaac-sim/IsaacLab) external project template.
+Anshul Paliwal. Built on the [Isaac Lab](https://github.com/isaac-sim/IsaacLab) external project template.
